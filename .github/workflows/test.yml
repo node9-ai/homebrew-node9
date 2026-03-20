@@ -24,7 +24,7 @@ jobs:
           # version output matches formula version
           node9 --version
           # core CLI commands are accessible
-          node9 help
+          node9 --help
           # doctor runs without crashing (exit 0 not required — env may lack git)
           node9 doctor || true
 
