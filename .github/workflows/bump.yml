@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.AUTO_PR_TOKEN }}
 
       - name: Compute SHA256
         id: sha
