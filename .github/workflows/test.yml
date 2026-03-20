@@ -12,8 +12,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install formula
-        run: brew install --formula Formula/node9.rb
+      - name: Tap and install
+        run: |
+          brew tap node9-ai/node9 https://github.com/node9-ai/homebrew-node9
+          brew install node9-ai/node9/node9
 
       - name: Verify install
         run: node9 --version
