@@ -1,0 +1,22 @@
+name: Test Formula
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install formula
+        run: brew install --formula Formula/node9.rb
+
+      - name: Verify install
+        run: node9 --version
+
+      - name: Audit formula
+        run: brew audit --strict Formula/node9.rb
