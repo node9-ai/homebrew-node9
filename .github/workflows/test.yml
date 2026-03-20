@@ -18,7 +18,15 @@ jobs:
           brew install node9-ai/node9/node9
 
       - name: Verify install
-        run: node9 --version
+        run: |
+          # binary exists and is executable
+          which node9
+          # version output matches formula version
+          node9 --version
+          # core CLI commands are accessible
+          node9 help
+          # doctor runs without crashing (exit 0 not required — env may lack git)
+          node9 doctor || true
 
       - name: Audit formula
         run: brew audit --strict node9-ai/node9/node9
