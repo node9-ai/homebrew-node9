@@ -1,8 +1,8 @@
 class Node9 < Formula
   desc "Sudo command for AI agents — execution security for Claude Code & MCP"
   homepage "https://github.com/node9-ai/node9-proxy"
-  url "https://registry.npmjs.org/@node9/proxy/-/proxy-1.0.18.tgz"
-  sha256 "b7edef8147d9e5226709c8904185539cf8385668ad187524d2ea7c5bd4db52c8"
+  url "https://registry.npmjs.org/@node9/proxy/-/proxy-1.0.19.tgz"
+  sha256 "bd58333660df9b731752a8446ef904674f9bfbc983b30d9bfa34b56d57f53d4d"
   license "Apache-2.0"
 
   depends_on "node"
