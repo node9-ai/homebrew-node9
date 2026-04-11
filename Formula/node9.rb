@@ -3,7 +3,7 @@ class Node9 < Formula
   homepage "https://github.com/node9-ai/node9-proxy"
   url "https://registry.npmjs.org/@node9/proxy/-/proxy-1.9.0.tgz"
   sha256 "cccf479e9dbbc10c346180c3161e1d4193c77aaeacb5c7e30285617cc2baa8f0"
-  license "Apache-2.0"
+  license "MIT"
 
   depends_on "node"
 
