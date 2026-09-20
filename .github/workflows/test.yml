@@ -6,6 +6,15 @@ on:
   pull_request:
     branches: [main]
 
+# Only what the job needs: read the formula, and open or close the issue the
+# failure step raises.
+permissions:
+  contents: read
+  issues: write
+
+env:
+  BROKEN_ISSUE_TITLE: "brew install is broken on main"
+
 jobs:
   test:
     runs-on: macos-latest
@@ -30,3 +39,77 @@ jobs:
 
       - name: Audit formula
         run: brew audit --strict node9-ai/node9/node9
+
+      # This job failed on three consecutive releases (v2.16.0, v2.16.1,
+      # v2.16.2) and on v2.15.0 before them, and every time it was right: the
+      # formula carried the sha256 of npm's 404 page and `brew install` was
+      # broken for everyone who ran the command in the README.
+      #
+      # GitHub did notify. Those notifications are ci_activity, which lands in
+      # the bell and is easy to never open; four sat unread, the oldest for
+      # three days. An issue is a different channel: it mails on its own
+      # rules, it stays visible in a list that is otherwise empty, and closing
+      # it is a deliberate act.
+      #
+      # One issue is reused across repeated failures, so a run of bad releases
+      # leaves one thread instead of a pile.
+      - name: Raise an issue if the formula is broken
+        if: failure() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: |
+          FORMULA_VERSION=$(grep -oE 'proxy-[0-9][0-9.]*\.tgz' Formula/node9.rb | head -1 | sed 's/proxy-//; s/\.tgz//')
+
+          # Exact title match on the open list, not the search API: search is
+          # eventually consistent and would open a second issue on a fast
+          # sequence of failed releases.
+          EXISTING=$(gh issue list --state open --limit 100 --json number,title \
+            --jq "[.[] | select(.title == \"${BROKEN_ISSUE_TITLE}\") | .number] | first // empty")
+
+          {
+            echo "\`brew install node9-ai/node9/node9\` failed on \`main\`."
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| formula version | \`${FORMULA_VERSION:-unknown}\` |"
+            echo "| commit | \`${SHA}\` |"
+            echo "| run | ${RUN_URL} |"
+            echo
+            echo "Until this is fixed, anyone running the install command in the README gets an error."
+            echo
+            echo "**Check the checksum first.** It has been the cause every time so far: \`npm publish\` returns before the tarball is fetchable, and a bump that races it can write the hash of npm's 404 body into the formula."
+            echo
+            echo '```bash'
+            echo 'V=$(grep -oE "proxy-[0-9][0-9.]*\.tgz" Formula/node9.rb | head -1 | sed "s/proxy-//; s/\.tgz//")'
+            echo 'curl -fsSL "https://registry.npmjs.org/@node9/proxy/-/proxy-${V}.tgz" -o /tmp/p.tgz && sha256sum /tmp/p.tgz'
+            echo 'grep sha256 Formula/node9.rb'
+            echo '```'
+            echo
+            echo "If those two digests differ, the formula is wrong and npm is fine. If \`curl\` itself fails, that version was never published."
+          } > /tmp/issue-body.md
+
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body-file /tmp/issue-body.md
+            echo "commented on existing issue #${EXISTING}"
+          else
+            gh issue create --title "${BROKEN_ISSUE_TITLE}" --body-file /tmp/issue-body.md
+          fi
+
+      # Closes the thread as soon as a release installs cleanly again, so an
+      # open issue always means "broken right now" and never "was broken once".
+      - name: Close the issue when the formula installs again
+        if: success() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          EXISTING=$(gh issue list --state open --limit 100 --json number,title \
+            --jq "[.[] | select(.title == \"${BROKEN_ISSUE_TITLE}\") | .number] | first // empty")
+          if [ -n "$EXISTING" ]; then
+            gh issue close "$EXISTING" --comment "Fixed: \`brew install\` succeeded on this commit. ${RUN_URL}"
+            echo "closed issue #${EXISTING}"
+          else
+            echo "nothing open"
+          fi
