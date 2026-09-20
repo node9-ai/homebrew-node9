@@ -12,20 +12,80 @@ jobs:
         with:
           token: ${{ secrets.AUTO_PR_TOKEN }}
 
-      - name: Compute SHA256
+      # Downloads the tarball and hashes THE FILE, never whatever the request
+      # returned.
+      #
+      # The old step was `curl -sL "$URL" | sha256sum`. With no --fail and no
+      # status check, a 404 body went straight into sha256sum and its hash was
+      # written to the formula as if it were the package. Nothing failed, the
+      # commit was pushed, and `brew install` broke on a checksum mismatch.
+      #
+      # It fired because `npm publish` returns before the tarball is fetchable
+      # ("your package is being processed and may take a few minutes to become
+      # available"). Measured 2026-09-20: this tap was dispatched at 19:27:56
+      # and @node9/proxy@2.16.2 only became downloadable at 19:31:01, three
+      # minutes later. v2.16.0, v2.16.1 and v2.16.2 were all committed with
+      # the SAME sha256 — c8d3eae1…, which is the hash of npm's 404 body.
+      # v2.15.0 was poisoned too and only healed because a later dispatch
+      # happened to re-run after the tarball had landed.
+      #
+      # So waiting is required, and so is proving what came back is a package:
+      # a 404 body is a perfectly valid file, and hashing it is exactly the
+      # failure this replaces.
+      - name: Fetch and verify the tarball
         id: sha
         run: |
           VERSION="${{ github.event.client_payload.version }}"
+          if [ -z "$VERSION" ]; then
+            echo "::error::dispatch carried no client_payload.version"
+            exit 1
+          fi
           URL="https://registry.npmjs.org/@node9/proxy/-/proxy-${VERSION}.tgz"
-          SHA=$(curl -sL "$URL" | sha256sum | awk '{print $1}')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "sha256=$SHA" >> $GITHUB_OUTPUT
-          echo "url=$URL" >> $GITHUB_OUTPUT
+
+          for attempt in $(seq 1 30); do
+            rm -f pkg.tgz
+            if curl -fsSL "$URL" -o pkg.tgz; then
+              echo "attempt ${attempt}: downloaded"
+              break
+            fi
+            echo "attempt ${attempt}: not on npm yet, retrying in 20s"
+            sleep 20
+          done
+
+          if [ ! -s pkg.tgz ]; then
+            echo "::error::${URL} never became downloadable after 10 minutes"
+            exit 1
+          fi
+          # Proof it is a package and not an error page that curl accepted.
+          if ! tar tzf pkg.tgz > /dev/null 2>&1; then
+            echo "::error::${URL} returned something that is not a gzip tarball"
+            head -c 200 pkg.tgz
+            exit 1
+          fi
+          if ! tar tzf pkg.tgz | grep -q '^package/package.json$'; then
+            echo "::error::tarball has no package/package.json"
+            exit 1
+          fi
+          # And that it is the version we were told to publish.
+          PKG_VERSION=$(tar xzOf pkg.tgz package/package.json | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version")
+          if [ "$PKG_VERSION" != "$VERSION" ]; then
+            echo "::error::dispatch said ${VERSION} but the tarball is ${PKG_VERSION}"
+            exit 1
+          fi
+
+          SHA=$(sha256sum pkg.tgz | awk '{print $1}')
+          echo "verified ${VERSION} sha256=${SHA}"
+          {
+            echo "version=$VERSION"
+            echo "sha256=$SHA"
+            echo "url=$URL"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Update formula
         run: |
           sed -i "s|url \".*\"|url \"${{ steps.sha.outputs.url }}\"|" Formula/node9.rb
           sed -i "s|sha256 \".*\"|sha256 \"${{ steps.sha.outputs.sha256 }}\"|" Formula/node9.rb
+          grep -E '^\s+(url|sha256) ' Formula/node9.rb
 
       - name: Commit and push
         run: |
