@@ -32,6 +32,10 @@ jobs:
       # So waiting is required, and so is proving what came back is a package:
       # a 404 body is a perfectly valid file, and hashing it is exactly the
       # failure this replaces.
+      #
+      # The wait is 20 minutes. 10 was not enough on 2026-11-23: v2.69.0 was
+      # published at 06:41:38 and only became downloadable at about 06:52:30,
+      # ten seconds after the old 10-minute loop gave up.
       - name: Fetch and verify the tarball
         id: sha
         run: |
@@ -42,7 +46,7 @@ jobs:
           fi
           URL="https://registry.npmjs.org/@node9/proxy/-/proxy-${VERSION}.tgz"
 
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 60); do
             rm -f pkg.tgz
             if curl -fsSL "$URL" -o pkg.tgz; then
               echo "attempt ${attempt}: downloaded"
@@ -53,7 +57,7 @@ jobs:
           done
 
           if [ ! -s pkg.tgz ]; then
-            echo "::error::${URL} never became downloadable after 10 minutes"
+            echo "::error::${URL} never became downloadable after 20 minutes"
             exit 1
           fi
           # Proof it is a package and not an error page that curl accepted.
