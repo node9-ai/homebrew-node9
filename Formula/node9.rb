@@ -1,8 +1,8 @@
 class Node9 < Formula
   desc "IAM for your AI agents: decide what each one may do, and keep the record"
   homepage "https://github.com/node9-ai/node9-proxy"
-  url "https://registry.npmjs.org/@node9/proxy/-/proxy-2.73.0.tgz"
-  sha256 "0b89f9361b9cb560a9865e3879e6a9dd4336ed23f3d4b66bd7a7ee7c230c8337"
+  url "https://registry.npmjs.org/@node9/proxy/-/proxy-2.74.0.tgz"
+  sha256 "f47de506399d16e842ac0ab2db528991773cb36a46d27f928c91d2891706a4d0"
   license "Apache-2.0"
 
   depends_on "node"
